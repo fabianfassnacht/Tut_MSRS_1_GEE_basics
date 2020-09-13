@@ -217,9 +217,14 @@ In the following I will now provide the complete code for exporting MODIS NDVI d
 
 
 
-To successfully run this code, copy & paste the complete code to the code editor window. Then click save or save as and the current script will be saved and appear in your list of scripts in section 1 of the code editor. After saving the script, you should be able to run the code by clicking Run.
+To successfully run this code, copy & paste the complete code to the code editor window. Then click save or save as and the current script will be saved and appear in your list of scripts in section 1 of the code editor. Alternatively you can also access the code here:
+
+[https://code.earthengine.google.com/9468bf79e67904e6cb0a639aa3b7019b](https://code.earthengine.google.com/9468bf79e67904e6cb0a639aa3b7019b)
+
+Be aware that you have to still define the Shapefile using your assets-list if you access the code via the link. After accessing and saving the script, you should be able to run the code by clicking Run.
 
 Once you pressed Run, new information will appear in the Console in section 3. 
+
 
 ![](gee_8.png)
 
@@ -245,7 +250,7 @@ We will then see a list of tasks that wait for being executed. In my case, there
 
 ![](gee_12.png)
 
-We can now start the export of the raster stack to our Google Drive by clicking the "RUN" button (marked with 1). This will open a new window in which we can define the spatial resolutiojn with which we want to export the images and a folder in our google drive in which the data shall be stored. We can also not define a folder, then the image will simply be exported to the parent folder of the Google Drive. Once you are happy with your settings click "RUN" and then you will have to wait a few minutes or up to a few hours (if the data is large) until the data appears in your Google Drive. If you are not sure how to access your Google drive, please google it. Should be very easy to find.
+We can now start the export of the raster stack to our Google Drive by clicking the "RUN" button (marked with 1). This will open a new window in which we can define the spatial resolutiojn with which we want to export the images and a folder in our google drive in which the data shall be stored. We can also not define a folder, then the image will simply be exported to the parent folder of the Google Drive. Once you are happy with your settings click "RUN" and then you will have to wait a few minutes or up to a few hours (if the data is large) until the data appears in your Google Drive. In this example a file named "MODIS_all_00_20_sm.tif" will occur in your google drive. If you are not sure how to access your Google drive, please google it. Should be very easy to find. Then download the data from your google drive in a folder on your hard-disc which you will be able to find again (we will need the data in Step 6).
 
 ![](gee_13.png)
 
@@ -411,3 +416,200 @@ Here is the code that should be ready to run - please go through it carefully an
 	  }
 	});
 	
+
+Alternatively, you can also access the code via this link:
+
+[https://code.earthengine.google.com/82beb77c79bea6813967a6ad07056c7e](https://code.earthengine.google.com/82beb77c79bea6813967a6ad07056c7e)
+
+After you have successfully executed the code and exported the file using the same work-flow as described for MODIS, you should also download the corresponding file (named LS\_NDVI\_all\_86\_20.tif) from your google drive to the same folder where you stored the MODIS raster. The two text-files containing the image acquisition dates for MODIS and Landsat should also be in the same folder.
+
+
+### Step 6: Exploring the exported data in R ###
+
+As final step in this tutorial, we will load the NDVI raster-stacks exported from the GEE in R and create time-series by merging the NDVI values with the image acquisition dates stored in the text-files. We will need the exported raster-files and the text-files. So please make sure that you have all data stored in a folder and know where this folder is.
+
+Next, we open RStudio and load the required packages:
+
+	# load required packages
+	require(raster)
+	require(xts)
+	require(zoo)
+
+In case some packages are missing, please install them (you should know how to do this by now, if not, please check the older Tutorials). Next, we will load the raster-files containing the MODIS and Landsat time series:
+
+	###
+	# load raster-stacks exported from the Google Earth Engine
+	###
+	
+	# set working directory
+	setwd("D:/Multiskalige_FE/5_Practicals/1_GEE_basics_v2")
+	# load Landsat time series with images from 1986-2020
+	ls_ndvi <- brick("LS_NDVI_all_86_20.tif")
+	nlayers(ls_ndvi)
+	# load MODIS time series with images from 2000-2020
+	mod_ndvi <- brick("MODIS_all_00_20_sm.tif")
+	nlayers(mod_ndvi)
+
+Be aware, that this time, we use the brick() command instead of the stack() command to load the raster files. This command will allow to access the raster-files in a slightly different way which increases the speed to access all raster-layers of an individual pixel (which in our case refers to a time-series). If you want to see the difference, you can re-run the code using the stack() command instead of the brick() command and you will see that one of code lines will run very slow (find out which one if you are interested!).
+
+After loading the raster stacks, we will also load the text-files containing the image acquisition dates, we copy & pasted from the GEE console. We will use the following code to do this:
+
+
+	###
+	# load corresponding dates of the time series
+	###
+	
+	# Landsat
+
+	# read table
+	ls_dat <- read.table("dates_ls.txt")
+	# drop every second line (containing only the id)
+	ls_dat_fin <- ls_dat[seq(2, nrow(ls_dat),2),]
+	# transform remaining rows from factor to character
+	ls_dat_fin2 <- as.character(ls_dat_fin)
+	# transform character-expression to dates
+	ls_dat_for <- as.Date(ls_dat_fin2, format = c("%Y%m%d"))
+	
+	# MODIS
+
+	# read table
+	m_dat <- read.table("dates_mod.txt")
+	# drop every second line (containing only the id)
+	m_dat_fin <- m_dat[seq(2, nrow(m_dat),2),]
+	# transform remaining rows from factor to character
+	m_dat_fin2 <- as.character(m_dat_fin)
+	# transform character-expression to dates
+	m_dat_for <- as.Date(m_dat_fin2, format = c("%Y%m%d"))
+
+
+ Be aware that R has an own data-type for dates. To transform the entries of the text-files into a vector containing only dates, we have to follow several processing steps as indicated in the code above. First we load the text-file into a variable. In this stage, the imported file looks like this:
+
+![](gee_14.png)
+
+That is, we  have the ID in one row and the actual acquisition dates in the format: YYYYMMDD in every second row. Hence, we are only interested in every second row of our variable. That is we we run the code:
+
+	ls_dat_fin <- ls_dat[seq(2, nrow(ls_dat),2),]
+
+which will then lead to the following output:
+
+![](gee_15.png)
+
+We now only have the acquisition dates in the variable, but as we can see the current vector is still in the wrong format. The information on "Levels" indicates that the data type of the vector is currently "factor". We hence first transform the vector to "character" and then to a "date" vector using the lines:  
+
+	# transform remaining rows from factor to character
+	ls_dat_fin2 <- as.character(ls_dat_fin)
+	# transform character-expression to dates
+	ls_dat_for <- as.Date(ls_dat_fin2, format = c("%Y%m%d"))
+
+Now, we have prepared the acquisition dates in a way, so that they can be used to create time-series objects. But before we will do this, we will have a quick look at the raster data we exported from the Google Earth Engine. We will use a for-loop to plot some of the NDVI images of the time series. We will not plot all images, as this would take a really long time (particularly for the Landsat data which generally requires a lot more time to plot the individual NDVI images). Be aware that you can stop the ploting-loop at any time by pressing the little "stop" button in RStudio. We will plot 10 of the Landsat scenes and 40 of the MODIS scenes. Depending on the speed of your computer this may take a while. Have a look at the images that appear and reflect what you are seeing.
+
+
+	###
+	# have a brief look on the data by plotting the individual time series
+	# raster of MODIS and some selected scenes of Landsat
+	###
+	
+	# plot selected Landsat NDVI rasters
+	
+	for(i in 420:430){
+	  
+	  plot(ls_ndvi[[i]], main=ls_dat_for[i], zlim=c(-0.5,1))
+	  
+	}
+	
+	# plot MODIS NDVI rasters
+	
+	for(i in 1:40){
+	  
+	  plot(mod_ndvi[[i]], main=m_dat_for[i], zlim=c(-5000,10000))
+	  
+	}
+
+Probably most of you observed at least two things: 1. The plotted raster data in many cases showed data gaps with NA or 0 values; 2. The NDVI images show quite clear seasonal signals with a lot more positive NDVI values during the summer months. Both of these observations are quite typical for dense time series of remote sensing data. Due to cloud cover and snow, there are many missing values included. Particularly, if no temporal mosaicing is conducted. The latter we will learn next week. We will now have a closer look at the seasonal signal by plotting NDVI time series of individual pixels. To do this, we first extract the complete NDVI time series of one MODIS and one Landsat pixel:
+
+	###
+	# extract NDVI time series for individual pixels
+	###
+	
+	# extract Landsat pixel (here row 45, column 56)
+	ls_ts <- as.vector(ls_ndvi[45,56])
+	
+	# MODIS (here, row 1, column 1)
+	m_ts <- as.vector(mod_ndvi[1,1])
+	m_ts[m_ts==0] <- NA  
+
+You could easily modify the codes above to select different pixels and explore how the corresponding time-series look like. In case of the MODIS pixels, a value of 0 indicates a masked pixel which had a low data quality due to cloud-cover or snow. We hence set al values of 0 to NA.
+
+Next, we will create time series objects. Time series objects are a special kind of data type in R which typically contain some sort of observational values (in our case NDVI values) and corresponding time stamps (which in our case were prepared from the text files as described above). There are different packages in R that allow creating time series objects. Here, we use the xtc package. A summary of the most important xtc commands can be found here:
+
+[https://drive.google.com/open?id=1sAe2GalxPk2T3Ce8R53Zz5fqooY9Katt](https://drive.google.com/open?id=1sAe2GalxPk2T3Ce8R53Zz5fqooY9Katt)
+
+To create the time series object, we first create a dataframe containing the NDVI values of the pixel and the time-stamps and subsequently create the xtc object:
+
+	# prepare dataframe with NDVI values and dates
+	ls.df <- data.frame(ls_ts, ls_dat_for)
+	m.df <- data.frame(m_ts, m_dat_for)
+	
+	# create time series object
+	ls.NDVI.ts <- xts(ls.df$ls_ts, order.by=ls.df$ls_dat_for)
+	mod.NDVI.ts <- xts(m.df$m_ts, order.by=m.df$m_dat_for)
+
+Next, we will plot the prepared time-series datasets:
+
+	# plot the time series
+	plot(ls.NDVI.ts)
+	plot(mod.NDVI.ts)
+
+This will lead to the following graphs:
+
+![](gee_16.png)
+![](gee_17.png)
+
+As we can see, both time series show a quite clear seasonal signal. The MODIS time series is notably shorter than the Landsat time series. Be aware that the two time series do not represent the exact same location and should hence not be directly compared. They are just meant to be a random example. Even though, you could adapt the code and extract a time series for pixels that are actually overlapping. The signal is most likely not directly comparable anyway as the MODIS pixels are a lot bigger than the Landsat pixels (250 m x 250 m vs. 30 m x 30 m). To get a better understanding of how the time series actually looks like, we can interpolate the gaps in the time series using some standard processing options offered by the xtc package:
+
+	###
+	# work with time-series object
+	###
+	
+	# interpolate missing values
+	
+	ls.NDVI.ts.ip <- na.approx(ls.NDVI.ts)
+	plot(ls.NDVI.ts.ip)
+	
+	mod.NDVI.ts.ip <- na.approx(mod.NDVI.ts)
+	plot(mod.NDVI.ts.ip)
+
+Running this code will lead to the two following graphs:
+
+![](gee_18.png)
+![](gee_19.png)
+
+The interpolated time series look a lot smoother and it seems even possible to observe some trends in these new graphs. In the NDVI time series there seems to be one outlier in 2016 which does not seem to be very realistic and is most likely some sort of artefact in the raw data which was not detected by the automated pre-processing routines. In both time series, there seems to be an overall trend to increasing NDVI values. We can try to depict this trend a bit clearer by converting the high-frequency time series of approximately one observation every 16 days to an annual time-series. We can do this with the following code:
+
+	# convert time series to yearly values
+	ls.NDVI.ts.y <- to.yearly(ls.NDVI.ts)
+	mod.NDVI.ts.y <- to.yearly(mod.NDVI.ts)
+	
+	# plot yearly time series
+	
+	plot(ls.NDVI.ts.y)
+	plot(ls.NDVI.ts.y$ls.NDVI.ts.High)
+	
+	plot(mod.NDVI.ts.y)
+	plot(mod.NDVI.ts.y$mod.NDVI.ts.High)
+
+This will in total lead to four plots:
+
+![](gee_20.png)
+![](gee_21.png)
+![](gee_22.png)
+![](gee_23.png)
+
+In the first and the third plot here, four trend lines are shown representing the first and the last NDVI value of the corresponding year (black and blue - could not find out yet which one is which) as well as the highest (red line) and lowest NDVI value (green line). In the second and forth plot, only the highest NDVI value of each year are depicted in a trend line. Here, the general increase in NDVI maxima is well depicted for the Landsat pixel, while a similar but weaker trend can be observed for the MODIS pixel.
+
+### Step 7: ILIAS Exercise  - find a pixel with decreasing vegetation trend or a pixel where vegetation disappeared completely ###
+
+You know now, how to extract a NDVI time-series for an individual pixel and we have learned above how to also interpolate and plot the corresponding time series. As we have so far only seen the time series signal for two pixels (one Landsat and one MODIS), we will play around with this a bit more in this exercise. The objective of the exercise is to identify a Landsat or a MODIS pixel in which a either a declining NDVI trend can be observed or the trend suggests that a vegetation area (showing the typical seasonal NDVI signal) has been transformed to another land-cover type (for example a comparable stable urban or bare soil signal which should show constantly low NDVI values). Please try to find such a pixel by changing the code above. Once you identified a pixel, make a screenshot of the time series and upload it to ILLIAS 
+
+
+With this, we reach the end of this first Tutorial on remote sensing time-series analysis. Next week, we will learn how to directly prepare annual time-series datasets in the GEE engine and get to know some algorithms for analyzing (remote sensing based) time series objects in R.  
